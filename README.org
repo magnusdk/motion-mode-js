@@ -1,6 +1,8 @@
 * motion-mode-js
 A toy project for visualizing "M-mode" ultrasound along arbitrary scan lines chosen in real-time in the browser.
 
+[[https://raw.githubusercontent.com/magnusdk/motion-mode-js/main/docs/media/demo.gif]]
+
 The ultrasound video is taken from [[https://en.wikipedia.org/wiki/Medical_ultrasound#/media/File:Ultrasound_of_human_heart_apical_4-cahmber_view.gif][Wikipedia]]. It has a [[https://creativecommons.org/licenses/by-sa/3.0/][CC BY-SA 3.0]] license, and this license applies to this project also.
 
 ** What is this?
