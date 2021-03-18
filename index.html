@@ -1,0 +1,38 @@
+<!doctype html>
+
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+
+    <title>Synthetic M-mode</title>
+    <meta name="description" content="The frontend of the Synthetic M-mode project">
+    <meta name="author" content="Magnus Dalen Kvalevåg">
+
+    <style>
+        body {
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        .hidden {
+            display: none
+        }
+    </style>
+</head>
+
+<body>
+    <p id="info"></p>
+
+    <canvas id="seqCanvas"></canvas>
+    <canvas id="tiledSeqCanvas" class=hidden></canvas>
+    <canvas id="mModeCanvas"></canvas>
+
+    <script src="js/images.js"></script>
+    <script src="js/main.js"></script>
+</body>
+
+</html>
