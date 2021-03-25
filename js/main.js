@@ -1,3 +1,7 @@
+const mModeLineWidth = 15;
+const mModeMarkerHeight = 3;
+
+
 function drawLine(ctx, { startX, startY, endX, endY }) {
     c1 = 'rgba(255, 255, 255, 0.5)'
     c2 = 'rgba(255, 0, 0, 0.5)'
@@ -34,7 +38,7 @@ function drawLine(ctx, { startX, startY, endX, endY }) {
     ctx.stroke();
 }
 
-function addSeqCanvasEventListeners(seqCanvas, state, onLineChange) {
+function addVideoCanvasEventListeners(videoCanvas, state, onLineChange) {
     let handle = null
 
     function setActiveHandle(x, y) {
@@ -63,16 +67,16 @@ function addSeqCanvasEventListeners(seqCanvas, state, onLineChange) {
         if (handle) onLineChange(state);
     }
 
-    seqCanvas.addEventListener('mousedown', e => {
+    videoCanvas.addEventListener('mousedown', e => {
         setActiveHandle(e.offsetX, e.offsetY);
         updateHandlePos(e.offsetX, e.offsetY);
     });
 
-    seqCanvas.addEventListener('mousemove', e => {
+    videoCanvas.addEventListener('mousemove', e => {
         updateHandlePos(e.offsetX, e.offsetY);
     });
 
-    seqCanvas.addEventListener('mouseup', e => {
+    videoCanvas.addEventListener('mouseup', e => {
         updateHandlePos(e.offsetX, e.offsetY);
         handle = null;
     });
@@ -85,10 +89,11 @@ function setupVideoCanvas(videoCanvasElement, state, spritesheet, onLineChange) 
     videoCanvasElement.width = spritesheet.width;
     videoCanvasElement.height = spritesheet.height;
 
-    addSeqCanvasEventListeners(videoCanvasElement, state, onLineChange);
+    addVideoCanvasEventListeners(videoCanvasElement, state, onLineChange);
 
     function nextFrame() {
-        state.frame = (state.frame + 1) % spritesheet.numImages;
+        if (!state.freezeVideoFrames)
+            state.frame = (state.frame + 1) % spritesheet.numImages;
     }
     startLoop(nextFrame, 50);
 
@@ -137,9 +142,24 @@ async function setupSpriteSheet(spriteSheetElement, width, height, images) {
     return spriteSheet
 }
 
+function addMModeCanvasEventListeners(mModeCanvas, state) {
+    mModeCanvas.addEventListener('mousemove', e => {
+        const hoveredFrame = Math.floor(e.offsetX / mModeLineWidth)
+        state.frame = hoveredFrame;
+    });
 
-function getUpdateMModeFn(mModeCanvas, spritesheet) {
+    mModeCanvas.addEventListener('mouseenter', e => {
+        state.freezeVideoFrames = true;
+    });
+
+    mModeCanvas.addEventListener('mouseout', e => {
+        state.freezeVideoFrames = false;
+    });
+}
+
+function setupMModeCanvas(mModeCanvas, state, spritesheet) {
     const ctx = mModeCanvas.getContext("2d");
+    addMModeCanvasEventListeners(mModeCanvasElement, state);
 
     return (state) => {
         pixelsArr = []
@@ -156,21 +176,19 @@ function getUpdateMModeFn(mModeCanvas, spritesheet) {
         }
 
         const numPixels = pixelsArr[0].length / 4
-        const mModeWidth = 15
-        const markerHeight = 3;
-        mModeCanvas.width = spritesheet.numImages * mModeWidth
-        mModeCanvas.height = numPixels + markerHeight
+        mModeCanvas.width = spritesheet.numImages * mModeLineWidth
+        mModeCanvas.height = numPixels + mModeMarkerHeight
 
-        const imageData = ctx.createImageData(spritesheet.numImages * mModeWidth, numPixels + markerHeight)
-        const markerOffset = markerHeight * spritesheet.numImages * mModeWidth * 4;
+        const imageData = ctx.createImageData(spritesheet.numImages * mModeLineWidth, numPixels + mModeMarkerHeight)
+        const markerOffset = mModeMarkerHeight * spritesheet.numImages * mModeLineWidth * 4;
 
         for (let i = 0; i < spritesheet.numImages; i++) {
             let pixels = pixelsArr[i]
             for (let h = 0; h < numPixels; h++) {
-                for (let w = 0; w < mModeWidth; w++) {
+                for (let w = 0; w < mModeLineWidth; w++) {
                     for (let rgb = 0; rgb < 4; rgb++) {
-                        let rowOffset = h * mModeWidth * spritesheet.numImages * 4
-                        let colOffset = w * 4 + i * mModeWidth * 4
+                        let rowOffset = h * mModeLineWidth * spritesheet.numImages * 4
+                        let colOffset = w * 4 + i * mModeLineWidth * 4
                         imageData.data[markerOffset + rowOffset + colOffset + rgb] = pixels[h * 4 + rgb]
                     }
                 }
@@ -185,7 +203,7 @@ function getUpdateMModeFn(mModeCanvas, spritesheet) {
 function updateMModeFrameIndicator(mModeCanvasElement, frame, numFrames) {
     const ctx = mModeCanvasElement.getContext("2d");
     ctx.fillStyle = 'rgba(0, 0, 0, 1)'
-    ctx.fillRect(0, 0, 15 * numFrames, 3);
+    ctx.fillRect(0, 0, mModeLineWidth * numFrames, 3);
     ctx.fillStyle = 'rgba(255, 0, 0, 1)'
     ctx.fillRect(15 * frame, 0, 15, 3);
 }
@@ -211,7 +229,7 @@ async function start(videoCanvasElement, mModeCanvasElement, images, initialStat
 
 
     // Setup internal callback
-    const updateMMode = getUpdateMModeFn(mModeCanvasElement, spriteSheet)
+    const updateMMode = setupMModeCanvas(mModeCanvasElement, state, spriteSheet)
     const _onLineChange = (state) => {
         state.mModeNeedsUpdate = true;
         onLineChange(state); // External callback
@@ -263,7 +281,7 @@ function loadImage(base64Data) {
 Promise.all(getImages().map(loadImage))
     .then((images) => {
         start(
-            document.getElementById("seqCanvas"),
+            document.getElementById("videoCanvas"),
             document.getElementById("mModeCanvas"),
             images,
             {},
