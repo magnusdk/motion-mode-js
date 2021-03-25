@@ -183,7 +183,7 @@ function getUpdateMModeFn(mModeCanvas, spritesheet) {
 
 
 function updateMModeFrameIndicator(mModeCanvasElement, frame, numFrames) {
-    const ctx = mModeCanvas.getContext("2d");
+    const ctx = mModeCanvasElement.getContext("2d");
     ctx.fillStyle = 'rgba(0, 0, 0, 1)'
     ctx.fillRect(0, 0, 15 * numFrames, 3);
     ctx.fillStyle = 'rgba(255, 0, 0, 1)'
