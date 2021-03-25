@@ -139,7 +139,7 @@ async function setupSpriteSheet(spriteSheetElement, width, height, images) {
 
 
 function getUpdateMModeFn(mModeCanvas, spritesheet) {
-    const mModeCtx = mModeCanvas.getContext("2d");
+    const ctx = mModeCanvas.getContext("2d");
 
     return (state) => {
         pixelsArr = []
@@ -157,26 +157,38 @@ function getUpdateMModeFn(mModeCanvas, spritesheet) {
 
         const numPixels = pixelsArr[0].length / 4
         const mModeWidth = 15
+        const markerHeight = 3;
         mModeCanvas.width = spritesheet.numImages * mModeWidth
-        mModeCanvas.height = numPixels
-        const imageData = mModeCtx.createImageData(spritesheet.numImages * mModeWidth, numPixels)
+        mModeCanvas.height = numPixels + markerHeight
+
+        const imageData = ctx.createImageData(spritesheet.numImages * mModeWidth, numPixels + markerHeight)
+        const markerOffset = markerHeight * spritesheet.numImages * mModeWidth * 4;
 
         for (let i = 0; i < spritesheet.numImages; i++) {
             let pixels = pixelsArr[i]
             for (let h = 0; h < numPixels; h++) {
                 for (let w = 0; w < mModeWidth; w++) {
                     for (let rgb = 0; rgb < 4; rgb++) {
-                        rowOffset = h * mModeWidth * spritesheet.numImages * 4
-                        colOffset = w * 4 + i * mModeWidth * 4
-                        imageData.data[rowOffset + colOffset + rgb] = pixels[h * 4 + rgb]
+                        let rowOffset = h * mModeWidth * spritesheet.numImages * 4
+                        let colOffset = w * 4 + i * mModeWidth * 4
+                        imageData.data[markerOffset + rowOffset + colOffset + rgb] = pixels[h * 4 + rgb]
                     }
                 }
             }
         }
-        mModeCtx.putImageData(imageData, 0, 0);
+
+        ctx.putImageData(imageData, 0, 0);
     }
 }
 
+
+function updateMModeFrameIndicator(mModeCanvasElement, frame, numFrames) {
+    const ctx = mModeCanvas.getContext("2d");
+    ctx.fillStyle = 'rgba(0, 0, 0, 1)'
+    ctx.fillRect(0, 0, 15 * numFrames, 3);
+    ctx.fillStyle = 'rgba(255, 0, 0, 1)'
+    ctx.fillRect(15 * frame, 0, 15, 3);
+}
 
 
 async function start(videoCanvasElement, mModeCanvasElement, images, initialState, { onLineChange }) {
@@ -184,32 +196,41 @@ async function start(videoCanvasElement, mModeCanvasElement, images, initialStat
     // Create a hidden canvas that will work as a sprite sheet.
     // Animating the video is basically just scrolling through this image.
     const spriteSheetElement = document.createElement('canvas');
-    const spriteSheetImageData = await setupSpriteSheet(spriteSheetElement, 400, 400, images)
+    const spriteSheet = await setupSpriteSheet(spriteSheetElement, 400, 400, images)
 
 
     // Setup state map
     const { startX, startY, endX, endY } = initialState
     const state = {
-        startX: startX || 100,
-        startY: startY || 100,
-        endX: endX || 300,
-        endY: endY || 300,
+        startX: startX || 200,
+        startY: startY || 200,
+        endX: endX || 250,
+        endY: endY || 250,
         frame: 0
     }
 
 
     // Setup internal callback
-    const updateMMode = getUpdateMModeFn(mModeCanvasElement, spriteSheetImageData)
+    const updateMMode = getUpdateMModeFn(mModeCanvasElement, spriteSheet)
     const _onLineChange = (state) => {
-        updateMMode(state)
-        onLineChange(state) // External callback
+        state.mModeNeedsUpdate = true;
+        onLineChange(state); // External callback
     }
-    const updateVideoCanvas = setupVideoCanvas(videoCanvasElement, state, spriteSheetImageData, _onLineChange)
+    const updateVideoCanvas = setupVideoCanvas(videoCanvasElement, state, spriteSheet, _onLineChange)
+
+    function updateAnimation() {
+        updateVideoCanvas();
+        if (state.mModeNeedsUpdate) {
+            updateMMode(state);
+            state.mModeNeedsUpdate = false;
+        }
+        updateMModeFrameIndicator(mModeCanvasElement, state.frame, spriteSheet.numImages);
+    }
 
 
     // Initialize callbacks and start animation
     _onLineChange(state)
-    startLoop(updateVideoCanvas)
+    startLoop(updateAnimation)
 }
 
 
