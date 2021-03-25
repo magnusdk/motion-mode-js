@@ -8,7 +8,7 @@ function loadImage(base64Data) {
 }
 
 function loadImages(base64Images) {
-    return Promise.all(images.map(loadImage));
+    return Promise.all(base64Images.map(loadImage));
 }
 
 function drawLine(ctx, { startX, startY, endX, endY }) {
@@ -96,7 +96,7 @@ function addSeqCanvasEventListeners(seqCanvas, state) {
 
 
 
-// https://st   ackoverflow.com/questions/48277514/canvas-get-pixels-on-a-line
+// https://stackoverflow.com/questions/48277514/canvas-get-pixels-on-a-line
 function getPixelsOnLine(imageData, startX, startY, endX, endY) {
     const data = imageData.data;
     let pixelCols = [];
@@ -142,7 +142,7 @@ function getPixelsOnLine(imageData, startX, startY, endX, endY) {
 
 
 
-function setupSeqCanvas(state, images) {
+function setupSeqCanvas(state, numImages, tiledSeqImageData) {
     let seqCanvas = document.getElementById("seqCanvas");
     let ctx = seqCanvas.getContext("2d");
 
@@ -153,35 +153,38 @@ function setupSeqCanvas(state, images) {
 
     let frameIdx = 0
     function nextFrame() {
-        frameIdx = (frameIdx + 1) % images.length;
+        frameIdx = (frameIdx + 1) % numImages;
         window.setTimeout(nextFrame, 50);
     }
     window.setTimeout(nextFrame, 50);
 
     return () => {
-        ctx.drawImage(images[frameIdx], 0, 0, 400, 400);
+        ctx.putImageData(tiledSeqImageData, 0, -400 * frameIdx, 0, 0, 400, numImages * 400);
         drawLine(ctx, state)
     }
 }
 
-function setupTiledSeqCanvas(images) {
+async function setupTiledSeqCanvas(images) {
     let canvas = document.getElementById("tiledSeqCanvas");
     let ctx = canvas.getContext("2d");
 
     canvas.width = 400
     canvas.height = 400 * images.length
 
-    images.forEach((image, i) => {
-        ctx.drawImage(image, 0, 0 + i * 400, 400, 400);
-    })
+    const _ = await Promise.all(images.map((image, i) => {
+        return new Promise((resolve) => {
+            image.onload = () => {
+                ctx.drawImage(image, 0, 0 + i * 400, 400, 400)
+                resolve()
+            }
+        })
+    }))
+    return ctx.getImageData(0, 0, canvas.width, canvas.height)
 }
 
-function setupMModeCanvas(state, numImages) {
+function setupMModeCanvas(state, numImages, tiledSeqImageData) {
     let mModeCanvas = document.getElementById("mModeCanvas");
     let mModeCtx = mModeCanvas.getContext("2d");
-    let tiledSeqCanvas = document.getElementById("tiledSeqCanvas");
-    let tiledSeqCtx = tiledSeqCanvas.getContext("2d");
-    const tiledSeqImageData = tiledSeqCtx.getImageData(0, 0, tiledSeqCtx.canvas.width, tiledSeqCtx.canvas.height);
 
     let prevState = { startX: null, startY: null, endX: null, endY: null }
     let hasChanged = () => {
@@ -189,7 +192,7 @@ function setupMModeCanvas(state, numImages) {
         for (key in state) {
             isSameForKey = prevState[key] === state[key]
             isSame = isSame && isSameForKey
-            if (!isSameForKey){
+            if (!isSameForKey) {
                 prevState[key] = state[key]
             }
         }
@@ -239,23 +242,26 @@ let state = {
     endX: 295, endY: 218
 }
 
-// images have made globally available in js/images.js.
-loadImages(images)
+// getImages have made globally available in js/images.js.
+loadImages(getImages())
     .then((images) => {
+        console.log("all loaded")
         info = document.getElementById("info")
-        seqAnim = setupSeqCanvas(state, images)
         setupTiledSeqCanvas(images)
-        mModeAnim = setupMModeCanvas(state, images.length)
+            .then((tiledSeqImageData) => {
+                seqAnim = setupSeqCanvas(state, images.length, tiledSeqImageData)
+                mModeAnim = setupMModeCanvas(state, images.length, tiledSeqImageData)
 
-        function animation() {
-            info.innerHTML = `
+                function animation() {
+                    info.innerHTML = `
             Start = (${state['startX']}, ${state['startY']}).
             End = (${state['endX']}, ${state['endY']}).
             Length = ${Math.floor(distance(state['startX'], state['startY'], state['endX'], state['endY']))}
             `
-            seqAnim()
-            mModeAnim()
-            window.requestAnimationFrame(animation)
-        }
-        window.requestAnimationFrame(animation)
+                    seqAnim()
+                    mModeAnim()
+                    window.requestAnimationFrame(animation)
+                }
+                window.requestAnimationFrame(animation)
+            })
     });
