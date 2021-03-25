@@ -1,16 +1,3 @@
-function loadImage(base64Data) {
-    const image = new Image()
-    p = new Promise((resolve, _) => {
-        image.onload = resolve(image)
-    })
-    image.src = base64Data
-    return p
-}
-
-function loadImages(base64Images) {
-    return Promise.all(base64Images.map(loadImage));
-}
-
 function drawLine(ctx, { startX, startY, endX, endY }) {
     c1 = 'rgba(255, 255, 255, 0.5)'
     c2 = 'rgba(255, 0, 0, 0.5)'
@@ -47,11 +34,7 @@ function drawLine(ctx, { startX, startY, endX, endY }) {
     ctx.stroke();
 }
 
-function distance(x1, y1, x2, y2) {
-    return Math.sqrt(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2))
-}
-
-function addSeqCanvasEventListeners(seqCanvas, state) {
+function addSeqCanvasEventListeners(seqCanvas, state, onLineChange) {
     let handle = null
 
     function setActiveHandle(x, y) {
@@ -77,6 +60,7 @@ function addSeqCanvasEventListeners(seqCanvas, state) {
                 state.endY = y;
                 break;
         }
+        if (handle) onLineChange(state);
     }
 
     seqCanvas.addEventListener('mousedown', e => {
@@ -95,173 +79,173 @@ function addSeqCanvasEventListeners(seqCanvas, state) {
 }
 
 
+function setupVideoCanvas(videoCanvasElement, state, spritesheet, onLineChange) {
+    let ctx = videoCanvasElement.getContext("2d");
 
-// https://stackoverflow.com/questions/48277514/canvas-get-pixels-on-a-line
-function getPixelsOnLine(imageData, startX, startY, endX, endY) {
-    const data = imageData.data;
-    let pixelCols = [];
-    let getPixel = (x, y) => {
-        if (x < 0 || x >= imageData.width || y < 0 || y >= imageData.height) {
-            return [0, 0, 0, 0];
-        }
-        let ind = (x + y * imageData.width) * 4;
-        return [data[ind++], data[ind++], data[ind++], data[ind++]];
-    }
+    videoCanvasElement.width = spritesheet.width;
+    videoCanvasElement.height = spritesheet.height;
 
-    var x = Math.floor(startX);
-    var y = Math.floor(startY);
-    const xx = Math.floor(endX);
-    const yy = Math.floor(endY);
-    const dx = Math.abs(xx - x);
-    const sx = x < xx ? 1 : -1;
-    const dy = -Math.abs(yy - y);
-    const sy = y < yy ? 1 : -1;
-    var err = dx + dy;
-    var e2;
-    var end = false;
-    while (!end) {
-        pixelCols = pixelCols.concat(getPixel(x, y));
-        if ((x === xx && y === yy)) {
-            end = true;
-        } else {
-            e2 = 2 * err;
-            if (e2 >= dy) {
-                err += dy;
-                x += sx;
-            }
-            if (e2 <= dx) {
-                err += dx;
-                y += sy;
-            }
-        }
-    }
-    return pixelCols;
-}
+    addSeqCanvasEventListeners(videoCanvasElement, state, onLineChange);
 
-
-
-
-
-function setupSeqCanvas(state, numImages, tiledSeqImageData) {
-    let seqCanvas = document.getElementById("seqCanvas");
-    let ctx = seqCanvas.getContext("2d");
-
-    seqCanvas.width = 400
-    seqCanvas.height = 400
-
-    addSeqCanvasEventListeners(seqCanvas, state);
-
-    let frameIdx = 0
     function nextFrame() {
-        frameIdx = (frameIdx + 1) % numImages;
-        window.setTimeout(nextFrame, 50);
+        state.frame = (state.frame + 1) % spritesheet.numImages;
     }
-    window.setTimeout(nextFrame, 50);
+    startLoop(nextFrame, 50);
 
-    return () => {
-        ctx.putImageData(tiledSeqImageData, 0, -400 * frameIdx, 0, 0, 400, numImages * 400);
-        drawLine(ctx, state)
+    function updateCanvas() {
+        ctx.putImageData(
+            spritesheet.imageData,
+            0,
+            -spritesheet.height * state.frame,
+            0,
+            0,
+            spritesheet.width,
+            spritesheet.fullHeight);
+        drawLine(ctx, state);
     }
+    return updateCanvas
 }
 
-async function setupTiledSeqCanvas(images) {
-    let canvas = document.getElementById("tiledSeqCanvas");
-    let ctx = canvas.getContext("2d");
+async function setupSpriteSheet(spriteSheetElement, width, height, images) {
+    const ctx = spriteSheetElement.getContext("2d");
+    const numImages = images.length
+    const fullHeight = height * numImages;
 
-    canvas.width = 400
-    canvas.height = 400 * images.length
+    spriteSheetElement.width = width
+    spriteSheetElement.height = fullHeight
 
-    const _ = await Promise.all(images.map((image, i) => {
+    // Await every image being drawn onto the canvas context
+    await Promise.all(images.map((image, i) => {
         return new Promise((resolve) => {
             image.onload = () => {
-                ctx.drawImage(image, 0, 0 + i * 400, 400, 400)
+                ctx.drawImage(image, 0, i * height, width, height)
                 resolve()
             }
         })
-    }))
-    return ctx.getImageData(0, 0, canvas.width, canvas.height)
+    }));
+
+    // Setup the returned spritesheet object
+    const imageData = ctx.getImageData(0, 0, spriteSheetElement.width, spriteSheetElement.height);
+    const spriteSheet = {
+        imageData: imageData,
+        numImages: numImages,
+        width: width,
+        height: height,
+        fullHeight: fullHeight
+    };
+
+    return spriteSheet
 }
 
-function setupMModeCanvas(state, numImages, tiledSeqImageData) {
-    let mModeCanvas = document.getElementById("mModeCanvas");
-    let mModeCtx = mModeCanvas.getContext("2d");
 
-    let prevState = { startX: null, startY: null, endX: null, endY: null }
-    let hasChanged = () => {
-        isSame = true
-        for (key in state) {
-            isSameForKey = prevState[key] === state[key]
-            isSame = isSame && isSameForKey
-            if (!isSameForKey) {
-                prevState[key] = state[key]
-            }
+function getUpdateMModeFn(mModeCanvas, spritesheet) {
+    const mModeCtx = mModeCanvas.getContext("2d");
+
+    return (state) => {
+        pixelsArr = []
+        for (let i = 0; i < spritesheet.numImages; i++) {
+            const pixels = getPixelsOnLine(
+                spritesheet.imageData.data,
+                spritesheet.width,
+                spritesheet.fullHeight,
+                state.startX,
+                state.startY + i * spritesheet.height,
+                state.endX,
+                state.endY + i * spritesheet.height)
+            pixelsArr.push(pixels)
         }
 
-        return !isSame
-    }
+        const numPixels = pixelsArr[0].length / 4
+        const mModeWidth = 15
+        mModeCanvas.width = spritesheet.numImages * mModeWidth
+        mModeCanvas.height = numPixels
+        const imageData = mModeCtx.createImageData(spritesheet.numImages * mModeWidth, numPixels)
 
-    return () => {
-        if (hasChanged()) {
-            pixelsArr = []
-            for (let i = 0; i < numImages; i++) {
-                let pixels = getPixelsOnLine(
-                    tiledSeqImageData,
-                    state.startX,
-                    state.startY + i * 400,
-                    state.endX,
-                    state.endY + i * 400)
-                pixelsArr.push(pixels)
-            }
-
-            let numPixels = pixelsArr[0].length / 4
-            let mModeWidth = 15
-            mModeCanvas.width = numImages * mModeWidth
-            mModeCanvas.height = numPixels
-            const imageData = mModeCtx.createImageData(numImages * mModeWidth, numPixels)
-
-            for (let i = 0; i < numImages; i++) {
-                let pixels = pixelsArr[i]
-                for (let h = 0; h < numPixels; h++) {
-                    for (let w = 0; w < mModeWidth; w++) {
-                        for (let rgb = 0; rgb < 4; rgb++) {
-                            rowOffset = h * mModeWidth * numImages * 4
-                            colOffset = w * 4 + i * mModeWidth * 4
-                            imageData.data[rowOffset + colOffset + rgb] = pixels[h * 4 + rgb]
-                        }
+        for (let i = 0; i < spritesheet.numImages; i++) {
+            let pixels = pixelsArr[i]
+            for (let h = 0; h < numPixels; h++) {
+                for (let w = 0; w < mModeWidth; w++) {
+                    for (let rgb = 0; rgb < 4; rgb++) {
+                        rowOffset = h * mModeWidth * spritesheet.numImages * 4
+                        colOffset = w * 4 + i * mModeWidth * 4
+                        imageData.data[rowOffset + colOffset + rgb] = pixels[h * 4 + rgb]
                     }
                 }
             }
-            mModeCtx.putImageData(imageData, 0, 0);
         }
+        mModeCtx.putImageData(imageData, 0, 0);
     }
 }
 
 
-let state = {
-    startX: 153, startY: 199,
-    endX: 295, endY: 218
+
+async function start(videoCanvasElement, mModeCanvasElement, images, initialState, { onLineChange }) {
+
+    // Create a hidden canvas that will work as a sprite sheet.
+    // Animating the video is basically just scrolling through this image.
+    const spriteSheetElement = document.createElement('canvas');
+    const spriteSheetImageData = await setupSpriteSheet(spriteSheetElement, 400, 400, images)
+
+
+    // Setup state map
+    const { startX, startY, endX, endY } = initialState
+    const state = {
+        startX: startX || 100,
+        startY: startY || 100,
+        endX: endX || 300,
+        endY: endY || 300,
+        frame: 0
+    }
+
+
+    // Setup internal callback
+    const updateMMode = getUpdateMModeFn(mModeCanvasElement, spriteSheetImageData)
+    const _onLineChange = (state) => {
+        updateMMode(state)
+        onLineChange(state) // External callback
+    }
+    const updateVideoCanvas = setupVideoCanvas(videoCanvasElement, state, spriteSheetImageData, _onLineChange)
+
+
+    // Initialize callbacks and start animation
+    _onLineChange(state)
+    startLoop(updateVideoCanvas)
 }
 
-// getImages have made globally available in js/images.js.
-loadImages(getImages())
-    .then((images) => {
-        console.log("all loaded")
-        info = document.getElementById("info")
-        setupTiledSeqCanvas(images)
-            .then((tiledSeqImageData) => {
-                seqAnim = setupSeqCanvas(state, images.length, tiledSeqImageData)
-                mModeAnim = setupMModeCanvas(state, images.length, tiledSeqImageData)
 
-                function animation() {
-                    info.innerHTML = `
-            Start = (${state['startX']}, ${state['startY']}).
-            End = (${state['endX']}, ${state['endY']}).
-            Length = ${Math.floor(distance(state['startX'], state['startY'], state['endX'], state['endY']))}
-            `
-                    seqAnim()
-                    mModeAnim()
-                    window.requestAnimationFrame(animation)
-                }
-                window.requestAnimationFrame(animation)
-            })
+
+
+
+
+
+// Just some setup for testing
+
+const infoElement = document.getElementById("info");
+
+function onLineChange(state) {
+    infoElement.innerHTML = `
+        Start = (${state['startX']}, ${state['startY']}).
+        End = (${state['endX']}, ${state['endY']}).
+        Length = ${Math.floor(distance(state['startX'], state['startY'], state['endX'], state['endY']))}
+        `
+}
+
+function loadImage(base64Data) {
+    const image = new Image()
+    p = new Promise((resolve, _) => {
+        image.onload = resolve(image)
+    })
+    image.src = base64Data
+    return p
+}
+
+Promise.all(getImages().map(loadImage))
+    .then((images) => {
+        start(
+            document.getElementById("seqCanvas"),
+            document.getElementById("mModeCanvas"),
+            images,
+            {},
+            { "onLineChange": onLineChange }
+        )
     });
