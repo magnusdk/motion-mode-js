@@ -44,7 +44,7 @@
     <script>
         async function handleFileSelected(e) {
             const file = e.target.files[0]; // User should only select one file, not a directory.
-            const loadedImages = await loadDicomAsCornerstoneImages(file);
+            const loadedImages = await loadDicomImages(file);
 
             start(
                 document.getElementById("videoCanvas"),
