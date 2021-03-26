@@ -1,4 +1,4 @@
-const mModeLineWidth = 15;
+const mModeLineWidth = 5;
 const mModeMarkerHeight = 3;
 
 
@@ -111,36 +111,6 @@ function setupVideoCanvas(videoCanvasElement, state, spritesheet, onLineChange) 
     return updateCanvas
 }
 
-async function setupSpriteSheet(spriteSheetElement, width, height, images) {
-    const ctx = spriteSheetElement.getContext("2d");
-    const numImages = images.length
-    const fullHeight = height * numImages;
-
-    spriteSheetElement.width = width
-    spriteSheetElement.height = fullHeight
-
-    // Await every image being drawn onto the canvas context
-    await Promise.all(images.map((image, i) => {
-        return new Promise((resolve) => {
-            image.onload = () => {
-                ctx.drawImage(image, 0, i * height, width, height)
-                resolve()
-            }
-        })
-    }));
-
-    // Setup the returned spritesheet object
-    const imageData = ctx.getImageData(0, 0, spriteSheetElement.width, spriteSheetElement.height);
-    const spriteSheet = {
-        imageData: imageData,
-        numImages: numImages,
-        width: width,
-        height: height,
-        fullHeight: fullHeight
-    };
-
-    return spriteSheet
-}
 
 function addMModeCanvasEventListeners(mModeCanvas, state) {
     mModeCanvas.addEventListener('mousemove', e => {
@@ -159,7 +129,7 @@ function addMModeCanvasEventListeners(mModeCanvas, state) {
 
 function setupMModeCanvas(mModeCanvas, state, spritesheet) {
     const ctx = mModeCanvas.getContext("2d");
-    addMModeCanvasEventListeners(mModeCanvasElement, state);
+    addMModeCanvasEventListeners(mModeCanvas, state);
 
     return (state) => {
         pixelsArr = []
@@ -205,7 +175,7 @@ function updateMModeFrameIndicator(mModeCanvasElement, frame, numFrames) {
     ctx.fillStyle = 'rgba(0, 0, 0, 1)'
     ctx.fillRect(0, 0, mModeLineWidth * numFrames, 3);
     ctx.fillStyle = 'rgba(255, 0, 0, 1)'
-    ctx.fillRect(15 * frame, 0, 15, 3);
+    ctx.fillRect(mModeLineWidth * frame, 0, mModeLineWidth, 3);
 }
 
 
@@ -214,7 +184,7 @@ async function start(videoCanvasElement, mModeCanvasElement, images, initialStat
     // Create a hidden canvas that will work as a sprite sheet.
     // Animating the video is basically just scrolling through this image.
     const spriteSheetElement = document.createElement('canvas');
-    const spriteSheet = await setupSpriteSheet(spriteSheetElement, 400, 400, images)
+    const spriteSheet = await setupSpritesheet(spriteSheetElement, 400, 400, images)
 
 
     // Setup state map
@@ -250,41 +220,3 @@ async function start(videoCanvasElement, mModeCanvasElement, images, initialStat
     _onLineChange(state)
     startLoop(updateAnimation)
 }
-
-
-
-
-
-
-
-// Just some setup for testing
-
-const infoElement = document.getElementById("info");
-
-function onLineChange(state) {
-    infoElement.innerHTML = `
-        Start = (${state['startX']}, ${state['startY']}).
-        End = (${state['endX']}, ${state['endY']}).
-        Length = ${Math.floor(distance(state['startX'], state['startY'], state['endX'], state['endY']))}
-        `
-}
-
-function loadImage(base64Data) {
-    const image = new Image()
-    p = new Promise((resolve, _) => {
-        image.onload = resolve(image)
-    })
-    image.src = base64Data
-    return p
-}
-
-Promise.all(getImages().map(loadImage))
-    .then((images) => {
-        start(
-            document.getElementById("videoCanvas"),
-            document.getElementById("mModeCanvas"),
-            images,
-            {},
-            { "onLineChange": onLineChange }
-        )
-    });

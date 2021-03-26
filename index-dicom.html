@@ -25,16 +25,42 @@
 </head>
 
 <body>
+    <label>Select a DICOM file:</label>
+    <input id="fileSelect" type="file"></input>
+
     <p id="info"></p>
     <canvas id="videoCanvas"></canvas>
     <canvas id="mModeCanvas"></canvas>
 
+    <script src="https://unpkg.com/cornerstone-core/dist/cornerstone.min.js"></script>
+    <script src="https://unpkg.com/dicom-parser"></script>
+    <script src="https://unpkg.com/cornerstone-wado-image-loader@3.3.1/dist/cornerstoneWADOImageLoader.min.js"></script>
     <script src="js/util.js"></script>
     <script src="js/images.js"></script>
     <script src="js/spritesheet.js"></script>
     <script src="js/main.js"></script>
+    <script src="js/dicom.js"></script>
 
     <script>
+        async function handleFileSelected(e) {
+            const file = e.target.files[0]; // User should only select one file, not a directory.
+            const loadedImages = await loadDicomAsCornerstoneImages(file);
+
+            start(
+                document.getElementById("videoCanvas"),
+                document.getElementById("mModeCanvas"),
+                loadedImages,
+                {},
+                { "onLineChange": onLineChange }
+            )
+        }
+
+
+        cornerstoneWADOImageLoader.external.cornerstone = cornerstone;
+        const fileSelectElement = document.getElementById("fileSelect");
+        fileSelectElement.addEventListener('change', handleFileSelected);
+
+
         const infoElement = document.getElementById("info");
 
         function onLineChange(state) {
@@ -44,26 +70,6 @@
         Length = ${Math.floor(distance(state['startX'], state['startY'], state['endX'], state['endY']))}
         `
         }
-
-        function loadImage(base64Data) {
-            const image = new Image()
-            p = new Promise((resolve, _) => {
-                image.onload = resolve(image)
-            })
-            image.src = base64Data
-            return p
-        }
-
-        Promise.all(getImages().map(loadImage))
-            .then((images) => {
-                start(
-                    document.getElementById("videoCanvas"),
-                    document.getElementById("mModeCanvas"),
-                    images,
-                    {},
-                    { "onLineChange": onLineChange }
-                )
-            });
     </script>
 </body>
 
